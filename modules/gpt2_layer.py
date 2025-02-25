@@ -29,6 +29,8 @@ class GPT2Layer(nn.Module):
         before it is added to the sub-layer input. WE DO NOT APPLY THE LAYER NORM
         IN THIS FUNCTION.
     """
+    res_output = input + dropout(dense_layer(output))
+    return res_output
     ### YOUR CODE HERE
     return input + dropout(dense_layer(output))
 
@@ -44,5 +46,13 @@ class GPT2Layer(nn.Module):
     """
 
     ### YOUR CODE HERE
-    raise NotImplementedError
+    hidden_states = self.attention_layer_norm(hidden_states)
+    attention_output = self.self_attention(hidden_states, attention_mask)
+    hidden_states = self.add(hidden_states, attention_output, self.attention_dense, self.attention_dropout)
+
+    hidden_states = self.out_layer_norm(hidden_states)
+    interm_output = self.interm_af(self.interm_dense(hidden_states))
+    hidden_states = self.add(hidden_states, self.out_dense(interm_output), self.out_dense, self.out_dropout)
+    return hidden_states
+    # raise NotImplementedError
 

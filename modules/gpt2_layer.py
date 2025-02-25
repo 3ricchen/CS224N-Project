@@ -32,8 +32,6 @@ class GPT2Layer(nn.Module):
     res_output = input + dropout(dense_layer(output))
     return res_output
     ### YOUR CODE HERE
-    return input + dropout(dense_layer(output))
-
 
 
   def forward(self, hidden_states, attention_mask):

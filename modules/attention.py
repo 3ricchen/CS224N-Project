@@ -34,7 +34,32 @@ class CausalSelfAttention(nn.Module):
   def attention(self, key, query, value, attention_mask):
 
     ### YOUR CODE HERE
-    raise NotImplementedError
+    # Compute raw attention scores (dot product between query and key).
+    # Assume key, query, value have shape: (batch, num_heads, seq_len, head_dim)
+    scores = torch.matmul(query, key.transpose(-2, -1))
+    
+    # Scale scores by the square root of the head dimension for stability.
+    scores = scores / (self.attention_head_size ** 0.5)
+    
+    # Create a causal mask to prevent attending to future tokens.
+    # The mask is a [seq_len, seq_len] boolean tensor where True indicates positions to mask.
+    seq_len = scores.size(-1)
+    causal_mask = torch.triu(torch.ones(seq_len, seq_len, device=scores.device), diagonal=1).bool()
+    
+    # Mask out the future tokens by setting their scores to -infinity.
+    scores = scores.masked_fill(causal_mask, float('-inf'))
+    
+    # Optionally, add an external attention mask (e.g. for padding tokens).
+    # This mask should be additive (typically with 0 for valid positions and -inf for masked ones).
+    if attention_mask is not None:
+        scores = scores + attention_mask
+
+    # Compute the attention weights.
+    attn_weights = torch.softmax(scores, dim=-1)
+    
+    # Multiply the attention weights by the value tensor to get the output.
+    output = torch.matmul(attn_weights, value)
+    return output
 
 
   def forward(self, hidden_states, attention_mask):

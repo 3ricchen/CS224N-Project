@@ -30,7 +30,8 @@ class GPT2Layer(nn.Module):
         IN THIS FUNCTION.
     """
     ### YOUR CODE HERE
-    raise NotImplementedError
+    return input + dropout(dense_layer(output))
+
 
 
   def forward(self, hidden_states, attention_mask):

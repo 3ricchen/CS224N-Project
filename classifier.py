@@ -69,7 +69,7 @@ class GPT2SentimentClassifier(torch.nn.Module):
     ### YOUR CODE HERE
     gpt_output = self.gpt(input_ids, attention_mask)
     hidden_states = gpt_output.get('last_hidden_state')
-    last_valid_idx = (attention_mask.cumsum(dim=1) - 1)[:, -1]
+    last_valid_idx = (attention_mask.sum(dim=1)) - 1
     final_hidden_states = hidden_states[torch.arange(hidden_states.size(0)), last_valid_idx]
     final_representation = self.dropout(final_hidden_states)
     output_logits = self.linear(final_representation)

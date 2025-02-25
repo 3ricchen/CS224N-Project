@@ -61,8 +61,32 @@ class AdamW(Optimizer):
                 ###
                 ###       Refer to the default project handout for more details.
                 ### YOUR CODE HERE
+                beta1, beta2 = group["betas"]
+                eps = group["eps"]
+                weight_decay = group["weight_decay"]
+
+                if len(state) == 0:
+                    state["step"] = 0
+                    state["exp_avg"] = torch.zeros_like(p.data)  # First moment
+                    state["exp_avg_sq"] = torch.zeros_like(p.data)  # Second moment
+                state["step"] += 1
+
+                exp_avg = state["exp_avg"]
+                exp_avg_sq = state["exp_avg_sq"]
                 
-                raise NotImplementedError
+                exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
+                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
+
+                bias_corrected_mom_1 = 1 - beta1 ** state["step"]
+                bias_corrected_mom_2 = 1 - beta2 ** state["step"]
+
+                step_size = alpha * math.sqrt(bias_corrected_mom_2) / bias_corrected_mom_1
+  
+                denom = exp_avg_sq.sqrt().add_(eps)
+                p.data.addcdiv_(exp_avg, denom, value=-step_size)
+                
+                if weight_decay != 0:
+                    p.data.add_(p.data, alpha=-weight_decay * alpha)
 
 
         return loss

@@ -64,8 +64,6 @@ class GPT2Model(GPTPreTrainedModel):
 
 
 
-   
-    
 
 
   def encode(self, hidden_states, attention_mask):

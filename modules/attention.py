@@ -36,7 +36,7 @@ class CausalSelfAttention(nn.Module):
     ### YOUR CODE HERE
     # Compute raw attention scores (dot product between query and key).
     # Assume key, query, value have shape: (batch, num_heads, seq_len, head_dim)
-    scores = torch.matmul(query, key.transpose(-2, -1))
+    scores = torch.matmul(query, key.transpose(-1, -2))
     
     # Scale scores by the square root of the head dimension for stability.
     scores = scores / (self.attention_head_size ** 0.5)
@@ -44,21 +44,21 @@ class CausalSelfAttention(nn.Module):
     # Create a causal mask to prevent attending to future tokens.
     # The mask is a [seq_len, seq_len] boolean tensor where True indicates positions to mask.
     seq_len = scores.size(-1)
-    causal_mask = torch.triu(torch.ones(seq_len, seq_len, device=scores.device), diagonal=1).bool()
-    
-    # Mask out the future tokens by setting their scores to -infinity.
-    scores = scores.masked_fill(causal_mask, float('-inf'))
+    mask = torch.triu(torch.full((seq_len, seq_len), float('-inf'), device=scores.device), diagonal=1)
     
     # Optionally, add an external attention mask (e.g. for padding tokens).
     # This mask should be additive (typically with 0 for valid positions and -inf for masked ones).
-    if attention_mask is not None:
-        scores = scores + attention_mask
+    scores = scores + attention_mask + mask
 
     # Compute the attention weights.
     attn_weights = torch.softmax(scores, dim=-1)
+
+    # Apply dropout to the attention weights.
+    attn_weights = self.dropout(attn_weights)
     
     # Multiply the attention weights by the value tensor to get the output.
     output = torch.matmul(attn_weights, value)
+    output = rearrange(output, 'b h t d -> b t (h d)')
     return output
 
 

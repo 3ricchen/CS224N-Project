@@ -20,8 +20,10 @@ TQDM_DISABLE = False
 
 
 @torch.no_grad()
-def model_eval_paraphrase(dataloader, model, device):
+def model_eval_paraphrase(dataloader, model, device, tokenizer):
   model.eval()  # Switch to eval model, will turn off randomness like dropout.
+  # help(model.forward)
+  # exit()
   y_true, y_pred, sent_ids = [], [], []
   for step, batch in enumerate(tqdm(dataloader, desc=f'eval', disable=TQDM_DISABLE)):
     b_ids, b_mask, b_sent_ids, labels = batch['token_ids'], batch['attention_mask'], batch['sent_ids'], batch[
@@ -29,8 +31,10 @@ def model_eval_paraphrase(dataloader, model, device):
 
     b_ids = b_ids.to(device)
     b_mask = b_mask.to(device)
-
-    logits = model(b_ids, b_mask).cpu().numpy()
+    inputs = {'input_ids' : b_ids, 'attention_mask' : b_mask}
+    outputs = model(**inputs).cpu().numpy()
+    logits = outputs[0]
+    # logits = model(b_ids, b_mask).cpu().numpy()
     preds = np.argmax(logits, axis=1).flatten()
 
     labels = (labels == 8505).long()

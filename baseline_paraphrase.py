@@ -44,7 +44,6 @@ def seed_everything(seed=11711):
   torch.backends.cudnn.benchmark = False
   torch.backends.cudnn.deterministic = True
 
-
 class ParaphraseGPT(nn.Module):
   """Your GPT-2 Model designed for paraphrase detection."""
 
@@ -56,6 +55,9 @@ class ParaphraseGPT(nn.Module):
     # By default, fine-tune the full model.
     for param in self.gpt.parameters():
       param.requires_grad = True
+    
+    # Classification head: maps the final token's representation to 2 classes (paraphrase or not).
+    self.paraphrase_detection_head = nn.Linear(args.d, 2)
 
   def forward(self, input_ids, attention_mask):
     """
@@ -115,6 +117,8 @@ def train(args):
   optimizer = AdamW(model.parameters(), lr=lr, weight_decay=0.)
   best_dev_acc = 0
 
+  ans_mapping = {0: 3919, 1: 8505}
+
   # Run for the specified number of epochs.
   for epoch in range(args.epochs):
     model.train()
@@ -125,12 +129,17 @@ def train(args):
       b_ids, b_mask, labels = batch['token_ids'], batch['attention_mask'], batch['labels'].flatten()
       b_ids = b_ids.to(device)
       b_mask = b_mask.to(device)
-      labels = labels.to(device)
+      # labels = labels.to(device)
+      labels = (labels == 8505).long().to(device)
 
       # Compute the loss, gradients, and update the model's parameters.
       optimizer.zero_grad()
       logits = model(b_ids, b_mask)
       preds = torch.argmax(logits, dim=1)
+      # print(preds)
+      # print(labels)
+      preds = [ans_mapping[p.item()] for p in preds]
+      
       loss = F.cross_entropy(logits, labels, reduction='mean')
       loss.backward()
       optimizer.step()
@@ -200,7 +209,7 @@ def get_args():
   parser.add_argument("--epochs", type=int, default=10)
   parser.add_argument("--use_gpu", action='store_true')
 
-  parser.add_argument("--batch_size", help='sst: 64, cfimdb: 8 can fit a 12GB GPU', type=int, default=8)
+  parser.add_argument("--batch_size", help='sst: 64, cfimdb: 8 can fit a 12GB GPU', type=int, default=64)
   parser.add_argument("--lr", type=float, help="learning rate", default=1e-5)
   parser.add_argument("--model_size", type=str,
                       help="The model size as specified on hugging face. DO NOT use the xl model.",
@@ -231,7 +240,7 @@ def add_arguments(args):
 
 if __name__ == "__main__":
   args = get_args()
-  args.filepath = f'{args.epochs}-{args.lr}-paraphrase.pt'  # Save path.
+  args.filepath = f'{args.epochs}-{args.lr}-baseline-paraphrase.pt'  # Save path.
   seed_everything(args.seed)  # Fix the seed for reproducibility.
   train(args)
   test(args)

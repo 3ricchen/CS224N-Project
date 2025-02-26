@@ -141,7 +141,7 @@ def train(args):
 @torch.no_grad()
 def test(args):
     device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
-    saved = torch.load(args.filepath)
+    saved = torch.load(args.filepath, weights_only = False)
 
     model = ParaphraseGPT(saved['args'])
     model.load_state_dict(saved['model'])
@@ -225,5 +225,5 @@ if __name__ == "__main__":
     args = get_args()
     args.filepath = f'{args.epochs}-{args.lr}-paraphrase.pt'
     seed_everything(args.seed)
-    train(args)
+    # train(args)
     test(args)

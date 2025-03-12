@@ -1,5 +1,5 @@
 '''
-Sonnet generation starter code with LoRA injection.
+Sonnet generation starter code with LoRA injection and dropout.
 
 Running:
   `python sonnet_generation.py --use_gpu --lora`
@@ -20,7 +20,7 @@ from tqdm import tqdm
 from transformers import GPT2Tokenizer
 from einops import rearrange
 
-from datasets import (
+from my_datasets import (
   SonnetsDataset,
 )
 from models.gpt2 import GPT2Model
@@ -32,7 +32,7 @@ TQDM_DISABLE = False
 # LoRA injection
 
 class LoRALinear(nn.Module):
-    def __init__(self, orig_linear: nn.Linear, r: int, alpha: float):
+    def __init__(self, orig_linear: nn.Linear, r: int, alpha: float, lora_dropout: float):
         super().__init__()
         self.orig_linear = orig_linear
         self.r = r
@@ -46,26 +46,30 @@ class LoRALinear(nn.Module):
         self.lora_A = nn.Parameter(torch.randn(r, orig_linear.in_features) * 0.01)
         self.lora_B = nn.Parameter(torch.zeros(orig_linear.out_features, r))
         self.scaling = self.alpha / self.r
+        
+        # Dropout applied to the LoRA update branch
+        self.lora_dropout = nn.Dropout(lora_dropout)
 
     def forward(self, x):
         # Standard forward using frozen linear layer plus the LoRA update.
-        return self.orig_linear(x) + (x @ self.lora_A.t() @ self.lora_B.t()) * self.scaling
+        lora_update = x @ self.lora_A.t() @ self.lora_B.t()
+        lora_update = self.lora_dropout(lora_update)
+        return self.orig_linear(x) + lora_update * self.scaling
 
 
-def inject_lora(module: nn.Module, r: int, alpha: float):
+def inject_lora(module: nn.Module, r: int, alpha: float, lora_dropout: float):
     """
     Recursively traverse the given module and replace any nn.Linear submodule
     whose qualified name contains 'attn' with a LoRALinear version.
     """
     for name, child in module.named_children():
         # Recursively inject LoRA into children.
-        inject_lora(child, r, alpha)
+        inject_lora(child, r, alpha, lora_dropout)
         # Check if this child is a linear layer and is part of an attention block.
         # (Here we use a simple heuristic: if the child's name contains "attn".)
         if isinstance(child, nn.Linear) and "attn" in name:
             # Replace with LoRALinear
-            setattr(module, name, LoRALinear(child, r, alpha))
-
+            setattr(module, name, LoRALinear(child, r, alpha, lora_dropout))
 
 
 # Fix the random seed.
@@ -80,7 +84,7 @@ def seed_everything(seed=11711):
 
 
 class SonnetGPT(nn.Module):
-    """Your GPT-2 Model designed for sonnet generation, optionally with LoRA injection."""
+    """Your GPT-2 Model designed for sonnet generation, optionally with LoRA injection and dropout."""
 
     def __init__(self, args):
         super().__init__()
@@ -92,10 +96,13 @@ class SonnetGPT(nn.Module):
         for param in self.gpt.parameters():
             param.requires_grad = True
 
+        # Initialize dropout layer.
+        self.dropout = nn.Dropout(args.dropout)
+
         # If LoRA is enabled, inject it into appropriate linear layers.
         if args.lora:
-            inject_lora(self.gpt, args.lora_rank, args.lora_alpha)
-            print(f"LoRA injected with rank {args.lora_rank} and alpha {args.lora_alpha}.")
+            inject_lora(self.gpt, args.lora_rank, args.lora_alpha, args.lora_dropout)
+            print(f"LoRA injected with rank {args.lora_rank}, alpha {args.lora_alpha}, and dropout {args.lora_dropout}.")
 
     def forward(self, input_ids, attention_mask):
         """
@@ -103,7 +110,11 @@ class SonnetGPT(nn.Module):
         Given input token IDs and attention mask, returns a sequence of logits
         (one per token) that predict the distribution over the vocabulary.
         """
-        return self.gpt.hidden_state_to_token(self.gpt(input_ids, attention_mask)['last_hidden_state'])
+        output = self.gpt(input_ids, attention_mask)
+        hidden_state = output['last_hidden_state']
+        # Apply dropout to the hidden states.
+        hidden_state = self.dropout(hidden_state)
+        return self.gpt.hidden_state_to_token(hidden_state)
 
     def get_device(self):
         for param in self.gpt.parameters():
@@ -177,7 +188,8 @@ def train(args):
     model = model.to(device)
 
     lr = args.lr
-    optimizer = AdamW(model.parameters(), lr=lr)
+    # Include weight decay for L2 regularization.
+    optimizer = AdamW(model.parameters(), lr=lr, weight_decay=args.weight_decay)
 
     # Run for the specified number of epochs.
     for epoch in range(args.epochs):
@@ -260,13 +272,21 @@ def get_args():
 
     parser.add_argument("--batch_size", type=int, default=16, help='The training batch size.')
     parser.add_argument("--lr", type=float, default=1e-5, help="Learning rate")
+    
+    # L2 regularization (weight decay)
+    parser.add_argument("--weight_decay", type=float, default=0.2, help="Weight decay (L2 regularization) coefficient.")
+    
+    # Dropout probability for the model.
+    parser.add_argument("--dropout", type=float, default=0.5, help="Dropout probability.")
+
     parser.add_argument("--model_size", type=str, choices=['gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'],
-                        default='gpt2', help="The model size as specified on Hugging Face.")
+                        default='gpt2-large', help="The model size as specified on Hugging Face.")
 
     # LoRA-specific arguments.
     parser.add_argument("--lora", action='store_true', help="Enable LoRA injection for fine-tuning.")
     parser.add_argument("--lora_rank", type=int, default=4, help="LoRA rank (low-dimensional bottleneck).")
     parser.add_argument("--lora_alpha", type=float, default=16, help="LoRA scaling factor alpha.")
+    parser.add_argument("--lora_dropout", type=float, default=0.3, help="Dropout probability for LoRA update branch.")
 
     args = parser.parse_args()
     return args

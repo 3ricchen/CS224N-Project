@@ -22,13 +22,16 @@ from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from datasets import (
+from peft import PrefixEncoder, PrefixTuningConfig
+
+from my_datasets import (
   ParaphraseDetectionDataset,
   ParaphraseDetectionTestDataset,
   load_paraphrase_data
 )
 from evaluation import model_eval_paraphrase, model_test_paraphrase
 from models.gpt2 import GPT2Model
+from transformers import GPT2Tokenizer
 
 from optimizer import AdamW
 
@@ -44,41 +47,63 @@ def seed_everything(seed=11711):
   torch.backends.cudnn.benchmark = False
   torch.backends.cudnn.deterministic = True
 
-class ParaphraseGPT(nn.Module):
-  """Your GPT-2 Model designed for paraphrase detection."""
+class ParaphraseGPTWithPrefix(nn.Module):
+    def __init__(self, args):
+        super().__init__()
+        self.gpt = GPT2Model.from_pretrained(model=args.model_size, d=args.d, l=args.l, num_heads=args.num_heads)
+        self.prefix_length = args.prefix_length
+        
+        # Initialize prefix embeddings
+        self.prefix = nn.Parameter(torch.randn(1, args.prefix_length, args.d) * 0.01)
+        
+        # Classification head
+        self.paraphrase_detection_head = nn.Linear(args.d, 2)
+        
+        # Freeze GPT parameters and only train prefix
+        for param in self.gpt.parameters():
+            param.requires_grad = False
+        self.prefix.requires_grad = True
+        for param in self.paraphrase_detection_head.parameters():
+            param.requires_grad = True
 
-  def __init__(self, args):
-    super().__init__()
-    self.gpt = GPT2Model.from_pretrained(model=args.model_size, d=args.d, l=args.l, num_heads=args.num_heads)
-    self.paraphrase_detection_head = nn.Linear(args.d, 2)  # Paraphrase detection has two outputs: 1 (yes) or 0 (no).
-
-    # By default, fine-tune the full model.
-    for param in self.gpt.parameters():
-      param.requires_grad = True
-    
-    # Classification head: maps the final token's representation to 2 classes (paraphrase or not).
-    self.paraphrase_detection_head = nn.Linear(args.d, 2)
-
-  def forward(self, input_ids, attention_mask):
-    """
-    TODO: Predict the label of the token using the paraphrase_detection_head Linear layer.
-
-    We structure the input as:
-
-      'Is "{s1}" a paraphrase of "{s2}"? Answer "yes" or "no": '
-
-    So you want to find the prediction for the next token at the end of this sentence. Optimistically, it will be the
-    token "yes" (byte pair encoding index of 8505) for examples that are paraphrases or "no" (byte pair encoding index
-     of 3919) for examples that are not paraphrases.
-    """
-
-    'Takes a batch of sentences and produces embeddings for them.'
-    ### YOUR CODE HERE
-    hidden = self.gpt(input_ids, attention_mask)['last_hidden_state']
-    logits = self.paraphrase_detection_head(hidden[:, -1, :])
-    return logits
-
-
+    def forward(self, input_ids, attention_mask):
+        batch_size = input_ids.shape[0]
+        
+        # Get word embeddings
+        word_embeddings = self.gpt.embed(input_ids)
+        
+        # Expand prefix for batch size
+        prefix_embeddings = self.prefix.expand(batch_size, -1, -1)
+        
+        # Print shapes for debugging
+        print(f"prefix shape: {prefix_embeddings.shape}")
+        print(f"word embeddings shape: {word_embeddings.shape}")
+        
+        # Concatenate along sequence length dimension
+        combined_embeddings = torch.cat([prefix_embeddings, word_embeddings], dim=1)
+        
+        # Adjust attention mask
+        prefix_attention_mask = torch.ones(batch_size, self.prefix_length, device=attention_mask.device)
+        attention_mask_with_prefix = torch.cat([prefix_attention_mask, attention_mask], dim=1)
+        
+        # Encode the combined embeddings
+        sequence_output = self.gpt.encode(combined_embeddings, attention_mask_with_prefix)
+        sequence_output = self.gpt.final_layer_norm(sequence_output)
+        
+        # Get the final token representation
+        # last_non_pad_idx = attention_mask_with_prefix.sum(dim=1) - 1
+        # last_hidden = sequence_output[torch.arange(batch_size), last_non_pad_idx]
+        last_non_pad_idx = attention_mask_with_prefix.sum(dim=1) - 1
+        # Convert indices to long tensor
+        batch_indices = torch.arange(batch_size, device=sequence_output.device).long()
+        last_non_pad_idx = last_non_pad_idx.long()
+        
+        # Get final hidden state
+        last_hidden = sequence_output[batch_indices, last_non_pad_idx]
+                                      
+        # Classification
+        logits = self.paraphrase_detection_head(last_hidden)
+        return logits
 
 def save_model(model, optimizer, args, filepath):
   save_info = {
@@ -110,7 +135,7 @@ def train(args):
                                    collate_fn=para_dev_data.collate_fn)
 
   args = add_arguments(args)
-  model = ParaphraseGPT(args)
+  model = ParaphraseGPTWithPrefix(args)
   model = model.to(device)
 
   lr = args.lr
@@ -164,7 +189,7 @@ def test(args):
   device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
   saved = torch.load(args.filepath)
 
-  model = ParaphraseGPT(saved['args'])
+  model = ParaphraseGPTWithPrefix(saved['args'])
   model.load_state_dict(saved['model'])
   model = model.to(device)
   model.eval()
@@ -235,12 +260,13 @@ def add_arguments(args):
     args.num_heads = 20
   else:
     raise Exception(f'{args.model_size} is not supported.')
+  args.prefix_length = 10
   return args
 
 
 if __name__ == "__main__":
   args = get_args()
-  args.filepath = f'{args.epochs}-{args.lr}-baseline-paraphrase.pt'  # Save path.
+  args.filepath = f'{args.epochs}-{args.lr}-prefixtuning-paraphrase.pt'  # Save path.
   seed_everything(args.seed)  # Fix the seed for reproducibility.
   train(args)
   test(args)

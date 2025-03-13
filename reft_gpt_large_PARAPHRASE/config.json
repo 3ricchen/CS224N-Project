@@ -1,0 +1,34 @@
+{
+  "intervention_constant_sources": [
+    true
+  ],
+  "intervention_dimensions": [
+    1280
+  ],
+  "intervention_types": [
+    "<class 'pyreft.interventions.LoreftIntervention'>"
+  ],
+  "mode": "parallel",
+  "representations": [
+    [
+      11,
+      "block_output",
+      "pos",
+      1,
+      4,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  ],
+  "sorted_keys": [
+    "layer_11_comp_block_output_unit_pos_nunit_1#0"
+  ],
+  "transformers_version": "4.49.0"
+}

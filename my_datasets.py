@@ -25,16 +25,26 @@ def preprocess_string(s):
 
 
 class ParaphraseDetectionDataset(Dataset):
-  def __init__(self, dataset, args):
+  def __init__(self, dataset, args, tokenizer = None):
     self.dataset = dataset
     self.p = args
-    self.tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+    if tokenizer is None:
+      self.tokenizer = GPT2Tokenizer.from_pretrained('gpt2-xl')
+    else:
+      self.tokenizer = tokenizer
     self.tokenizer.pad_token = self.tokenizer.eos_token
 
   def __len__(self):
     return len(self.dataset)
 
   def __getitem__(self, idx):
+    sent1, sent2, label, sent_id = self.dataset[idx]
+    # return {
+    #     "sent1": sent1,
+    #     "sent2": sent2,
+    #     "label": label,
+    #     "sent_id": sent_id
+    # }
     return self.dataset[idx]
 
   def collate_fn(self, all_data):
@@ -45,7 +55,7 @@ class ParaphraseDetectionDataset(Dataset):
     labels = self.tokenizer(labels, return_tensors='pt', padding=True, truncation=True)['input_ids']
     sent_ids = [x[3] for x in all_data]
 
-    cloze_style_sents = [f'Question 1: "{s1}"\nQuestion 2: "{s2}\nAre these questions asking the same thing?\n' for
+    cloze_style_sents = [f'<|user|>:Tell me if these questions are asking the same thing.\nQuestion 1: "{s1}"\nQuestion 2: "{s2}\nAre these questions asking the same thing?</s>\n<|assistant|>:' for
                          (s1, s2) in zip(sent1, sent2)]
     encoding = self.tokenizer(cloze_style_sents, return_tensors='pt', padding=True, truncation=True)
 
@@ -80,9 +90,10 @@ class ParaphraseDetectionTestDataset(Dataset):
     sent2 = [x[1] for x in all_data]
     sent_ids = [x[2] for x in all_data]
 
-    cloze_style_sents = [f'Is "{s1}" a paraphrase of "{s2}"? Answer "yes" or "no": ' for (s1, s2) in
-                         zip(sent1, sent2)]
-
+    # cloze_style_sents = [f'Is "{s1}" a paraphrase of "{s2}"? Answer "yes" or "no": ' for (s1, s2) in
+    #                      zip(sent1, sent2)]
+    cloze_style_sents = [f'<|user|>:Tell me if these questions are asking the same thing.\nQuestion 1: "{s1}"\nQuestion 2: "{s2}\nAre these questions asking the same thing?</s>\n<|assistant|>:' for
+                         (s1, s2) in zip(sent1, sent2)]
     encoding = self.tokenizer(cloze_style_sents, return_tensors='pt', padding=True, truncation=True)
 
     token_ids = torch.LongTensor(encoding['input_ids'])

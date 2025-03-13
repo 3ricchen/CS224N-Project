@@ -76,8 +76,8 @@ class ParaphraseGPTWithPrefix(nn.Module):
         prefix_embeddings = self.prefix.expand(batch_size, -1, -1)
         
         # Print shapes for debugging
-        print(f"prefix shape: {prefix_embeddings.shape}")
-        print(f"word embeddings shape: {word_embeddings.shape}")
+        # print(f"prefix shape: {prefix_embeddings.shape}")
+        # print(f"word embeddings shape: {word_embeddings.shape}")
         
         # Concatenate along sequence length dimension
         combined_embeddings = torch.cat([prefix_embeddings, word_embeddings], dim=1)
@@ -238,7 +238,7 @@ def get_args():
   parser.add_argument("--lr", type=float, help="learning rate", default=1e-5)
   parser.add_argument("--model_size", type=str,
                       help="The model size as specified on hugging face. DO NOT use the xl model.",
-                      choices=['gpt2', 'gpt2-medium', 'gpt2-large'], default='gpt2')
+                      choices=['gpt2', 'gpt2-medium', 'gpt2-large'], default='gpt2-xl')
 
   args = parser.parse_args()
   return args
@@ -258,6 +258,10 @@ def add_arguments(args):
     args.d = 1280
     args.l = 36
     args.num_heads = 20
+  elif args.model_size == 'gpt2-xl':
+    args.d = 1600
+    args.l = 48
+    args.num_heads = 25
   else:
     raise Exception(f'{args.model_size} is not supported.')
   args.prefix_length = 10

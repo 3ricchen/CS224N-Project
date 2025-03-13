@@ -262,7 +262,8 @@ def add_arguments(args):
 
 if __name__ == "__main__":
   args = get_args()
-  args.filepath = f'{args.epochs}-{args.lr}-reft-paraphrase.pt'  # Save path.
-  seed_everything(args.seed)  # Fix the seed for reproducibility.
-  train(args)
+  # args.filepath = f'{args.epochs}-{args.lr}-reft-paraphrase.pt'  # Save path.
+  # seed_everything(args.seed)  # Fix the seed for reproducibility.
+  # train(args)
+
   test(args)

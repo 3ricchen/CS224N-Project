@@ -26,8 +26,8 @@ from types import SimpleNamespace
 import time
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-gpt2 = transformers.AutoModelForCausalLM.from_pretrained('gpt2-large').to(device)
-gpt2_tokenizer = transformers.AutoTokenizer.from_pretrained('gpt2-large', device = 'cuda')
+gpt2 = transformers.AutoModelForCausalLM.from_pretrained('gpt2-xl').to(device)
+gpt2_tokenizer = transformers.AutoTokenizer.from_pretrained('gpt2-xl', device = 'cuda')
 gpt2_tokenizer.pad_token = gpt2_tokenizer.unk_token
 EOS_TOKEN=gpt2_tokenizer.eos_token
 
@@ -78,6 +78,8 @@ para_dev_dataloader = DataLoader(para_dev_data, shuffle=False, batch_size=args.b
 inputs = [f'<|user|>:Tell me if these questions are asking the same thing.\nQuestion 1: {p[0]}\nQuestion 2: {p[1]}\nAre these questions asking the same thing?</s>\n<|assistant|>:' for p in para_train_data]
 outputs = [('yes' if p[2] == 1 else 'no') for p in para_train_data]
 print('DATA LOADED')
+
+
 positions = 'l3'
 data_module = pyreft.make_multiple_position_supervised_data_module(
     gpt2_tokenizer, gpt2, inputs, outputs,

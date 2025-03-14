@@ -51,9 +51,13 @@ class ParaphraseDetectionDataset(Dataset):
     sent1 = [x[0] for x in all_data]
     sent2 = [x[1] for x in all_data]
     # labels = torch.LongTensor([x[2] for x in all_data])
+    int_labels = torch.LongTensor([x[2] for x in all_data])
     labels = ['yes' if label == 1 else 'no' for label in [x[2] for x in all_data]]
     labels = self.tokenizer(labels, return_tensors='pt', padding=True, truncation=True)['input_ids']
     sent_ids = [x[3] for x in all_data]
+
+    encoding1 = self.tokenizer(sent1, return_tensors='pt', padding=True, truncation=True)
+    encoding2 = self.tokenizer(sent2, return_tensors='pt', padding=True, truncation=True)
 
     cloze_style_sents = [f'<|user|>:Tell me if these questions are asking the same thing.\nQuestion 1: "{s1}"\nQuestion 2: "{s2}\nAre these questions asking the same thing?</s>\n<|assistant|>:' for
                          (s1, s2) in zip(sent1, sent2)]
@@ -63,6 +67,11 @@ class ParaphraseDetectionDataset(Dataset):
     attention_mask = torch.LongTensor(encoding['attention_mask'])
 
     batched_data = {
+      'input_ids1' : encoding1['input_ids'],
+      'attention_mask1' : encoding1['attention_mask'],
+      'input_ids2' : encoding2['input_ids'],
+      'attention_mask2' : encoding2['attention_mask'],
+      'int_labels': int_labels,
       'token_ids': token_ids,
       'attention_mask': attention_mask,
       'labels': labels,

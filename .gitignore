@@ -5,3 +5,6 @@
 *.pkl
 .idea/
 out/
+*.yml
+frankenstein
+*.pth

@@ -52,7 +52,7 @@ class ParaphraseGPTWithPrefix(nn.Module):
         self.gpt = GPT2Model.from_pretrained(model=args.model_size, d=args.d, l=args.l, num_heads=args.num_heads)
         self.prefix_length = args.prefix_length
         
-        self.prefix = nn.Parameter(torch.randn(1, args.prefix_length, args.d) * 0.01)
+        self.prefix = nn.Parameter(torch.randn(1, args.prefix_length, args.d) * 0.001)
         
         self.paraphrase_detection_head = nn.Linear(args.d, 2)
         

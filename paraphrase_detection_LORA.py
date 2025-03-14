@@ -231,8 +231,8 @@ if __name__ == "__main__":
     args.filepath = f'{args.epochs}-{args.lr}-paraphrase.pt'
     seed_everything(args.seed)
     start_time = time.time()
-    # # train(args)
-    # print('*' * 50)
-    # print('Training time elapsed:', time.time() - start_time)
-    # print('*' * 50)
+    train(args)
+    print('*' * 50)
+    print('Training time elapsed:', time.time() - start_time)
+    print('*' * 50)
     test(args)

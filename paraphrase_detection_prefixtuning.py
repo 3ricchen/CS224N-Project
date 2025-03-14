@@ -37,7 +37,6 @@ from optimizer import AdamW
 
 TQDM_DISABLE = False
 
-# Fix the random seed.
 def seed_everything(seed=11711):
   random.seed(seed)
   np.random.seed(seed)
@@ -53,13 +52,11 @@ class ParaphraseGPTWithPrefix(nn.Module):
         self.gpt = GPT2Model.from_pretrained(model=args.model_size, d=args.d, l=args.l, num_heads=args.num_heads)
         self.prefix_length = args.prefix_length
         
-        # Initialize prefix embeddings
         self.prefix = nn.Parameter(torch.randn(1, args.prefix_length, args.d) * 0.01)
         
-        # Classification head
         self.paraphrase_detection_head = nn.Linear(args.d, 2)
         
-        # Freeze GPT parameters and only train prefix
+        # Freeze GPT parameters, only train prefix
         for param in self.gpt.parameters():
             param.requires_grad = False
         self.prefix.requires_grad = True
@@ -68,40 +65,28 @@ class ParaphraseGPTWithPrefix(nn.Module):
 
     def forward(self, input_ids, attention_mask):
         batch_size = input_ids.shape[0]
-        
-        # Get word embeddings
         word_embeddings = self.gpt.embed(input_ids)
         
-        # Expand prefix for batch size
         prefix_embeddings = self.prefix.expand(batch_size, -1, -1)
         
         # Print shapes for debugging
         # print(f"prefix shape: {prefix_embeddings.shape}")
         # print(f"word embeddings shape: {word_embeddings.shape}")
-        
-        # Concatenate along sequence length dimension
         combined_embeddings = torch.cat([prefix_embeddings, word_embeddings], dim=1)
         
-        # Adjust attention mask
         prefix_attention_mask = torch.ones(batch_size, self.prefix_length, device=attention_mask.device)
         attention_mask_with_prefix = torch.cat([prefix_attention_mask, attention_mask], dim=1)
         
-        # Encode the combined embeddings
         sequence_output = self.gpt.encode(combined_embeddings, attention_mask_with_prefix)
         sequence_output = self.gpt.final_layer_norm(sequence_output)
         
-        # Get the final token representation
-        # last_non_pad_idx = attention_mask_with_prefix.sum(dim=1) - 1
-        # last_hidden = sequence_output[torch.arange(batch_size), last_non_pad_idx]
+
         last_non_pad_idx = attention_mask_with_prefix.sum(dim=1) - 1
-        # Convert indices to long tensor
         batch_indices = torch.arange(batch_size, device=sequence_output.device).long()
         last_non_pad_idx = last_non_pad_idx.long()
         
-        # Get final hidden state
         last_hidden = sequence_output[batch_indices, last_non_pad_idx]
                                       
-        # Classification
         logits = self.paraphrase_detection_head(last_hidden)
         return logits
 
@@ -264,7 +249,7 @@ def add_arguments(args):
     args.num_heads = 25
   else:
     raise Exception(f'{args.model_size} is not supported.')
-  args.prefix_length = 10
+  args.prefix_length = 4
   return args
 
 

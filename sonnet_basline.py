@@ -20,7 +20,7 @@ from tqdm import tqdm
 from transformers import GPT2Tokenizer
 from einops import rearrange
 
-from datasets import (
+from my_datasets import (
   SonnetsDataset,
 )
 from models.gpt2 import GPT2Model
@@ -224,7 +224,7 @@ def get_args():
   parser.add_argument("--batch_size", help='The training batch size.', type=int, default=8)
   parser.add_argument("--lr", type=float, help="learning rate", default=1e-5)
   parser.add_argument("--model_size", type=str, help="The model size as specified on hugging face.",
-                      choices=['gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'], default='gpt2')
+                      choices=['gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'], default='gpt2-large')
 
   args = parser.parse_args()
   return args
